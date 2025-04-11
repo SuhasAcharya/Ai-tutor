@@ -876,6 +876,22 @@ export default function Home() {
 
       {/* Display transcript */}
       {userTranscript && <p>You said: {userTranscript}</p>}
+
+      {/* --- TEMPORARY TEST BUTTON --- */}
+      <button style={{ border: '1px solid red', padding: '10px', margin: '10px' }} onClick={() => {
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          console.log("Attempting test speech...");
+          const testUtterance = new SpeechSynthesisUtterance("Hello, can you hear this test?");
+          // Try default voice first
+          testUtterance.onerror = (e) => console.error("Test speech error:", e);
+          testUtterance.onend = () => console.log("Test speech finished.");
+          window.speechSynthesis.speak(testUtterance);
+        } else {
+          console.log("Speech synthesis not supported for test.");
+        }
+      }}>Test Speech Output</button>
+      {/* --- END TEMPORARY TEST BUTTON --- */}
+
     </main>
   );
 }
