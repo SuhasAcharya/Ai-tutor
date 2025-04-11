@@ -878,55 +878,6 @@ export default function Home() {
       {/* Display transcript */}
       {userTranscript && <p>You said: {userTranscript}</p>}
 
-      {/* --- TEMPORARY TEST BUTTON (SPEECH RECOGNITION) --- */}
-      <button style={{ border: '2px solid blue', padding: '10px', margin: '10px', display: 'block' }} onClick={() => {
-        console.log("Direct Start Listening Button Clicked!"); // Log click
-        startListening(); // Call the function directly
-      }} disabled={isListening}>
-        {isListening ? 'Listening (Direct Test)...' : 'Test Start Listening Directly'}
-      </button>
-      {/* --- END TEMPORARY TEST BUTTON --- */}
-
-      {/* --- TEMPORARY TEST BUTTON (GETUSERMEDIA ONLY) --- */}
-      <button style={{ border: '2px solid green', padding: '10px', margin: '10px', display: 'block' }} onClick={() => {
-        console.log("Direct GetUserMedia Button Clicked!");
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(stream => {
-              console.log("getUserMedia SUCCESS! Permission likely granted or prompted.");
-              alert("getUserMedia SUCCESS! Mic access seems okay."); // Alert for visibility
-              stream.getTracks().forEach(track => track.stop()); // Clean up
-            })
-            .catch(err => {
-              console.error("Direct getUserMedia FAILED:", err.name, err.message);
-              alert(`getUserMedia FAILED: ${err.name} - ${err.message}`); // Alert for visibility
-              setPermissionError(`Mic Test Failed: ${err.name}. Check browser settings.`);
-            });
-        } else {
-          alert("getUserMedia is not supported in this browser.");
-          console.error("getUserMedia not supported.");
-          setPermissionError("Mic access API not supported.");
-        }
-      }}>
-        Test Mic Permission Directly (getUserMedia)
-      </button>
-      {/* --- END TEMPORARY TEST BUTTON --- */}
-
-      {/* --- TEMPORARY TEST BUTTON (SPEECH SYNTHESIS) --- */}
-      <button style={{ border: '1px solid red', padding: '10px', margin: '10px' }} onClick={() => {
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-          console.log("Attempting test speech...");
-          const testUtterance = new SpeechSynthesisUtterance("Hello, can you hear this test?");
-          // Try default voice first
-          testUtterance.onerror = (e) => console.error("Test speech error:", e);
-          testUtterance.onend = () => console.log("Test speech finished.");
-          window.speechSynthesis.speak(testUtterance);
-        } else {
-          console.log("Speech synthesis not supported for test.");
-        }
-      }}>Test Speech Output</button>
-      {/* --- END TEMPORARY TEST BUTTON --- */}
-
     </main>
   );
 }
