@@ -1,5 +1,7 @@
 'use client'; // Required for hooks and event handlers
 
+import 'regenerator-runtime/runtime';
+
 import React, { useState, useEffect, useRef } from 'react';
 import dynamicImport from 'next/dynamic'; // Import dynamic and rename it
 import { v4 as uuidv4 } from 'uuid'; // For session ID
