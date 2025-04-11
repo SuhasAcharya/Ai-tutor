@@ -5,7 +5,7 @@
 import '../lib/polyfill';
 import 'regenerator-runtime/runtime';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dynamicImport from 'next/dynamic'; // Import dynamic and rename it
 import { v4 as uuidv4 } from 'uuid'; // For session ID
 import CssAvatar from '../components/CssAvatar'; // Import the new CSS Avatar component
@@ -51,6 +51,10 @@ export default function Home() {
   const utteranceRef = useRef(null); // Ref for the current speech synthesis utterance
   const [showDemo, setShowDemo] = useState(false);
   const speechSynthesisRef = useRef(null);
+  const [permissionError, setPermissionError] = useState(''); // State for permission errors
+
+  // Ref to hold the SpeechRecognition instance
+  const recognitionRef = useRef(null);
 
   // --- Effect to set isClient to true after mounting ---
   useEffect(() => {
@@ -244,6 +248,133 @@ export default function Home() {
       cleanupSpeech();
     };
   }, []);
+
+  // --- Function to handle starting speech recognition ---
+  const startListening = useCallback(() => {
+    setPermissionError(''); // Clear previous errors
+    setUserTranscript(''); // Clear previous transcript
+
+    // Check for browser support first
+    if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      console.log("Speech Recognition API supported.");
+
+      // --- Explicitly request microphone permission first ---
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((stream) => {
+          console.log("Microphone permission granted.");
+          // Important: Stop the track immediately if you only need permission
+          stream.getTracks().forEach(track => track.stop());
+
+          // --- Now proceed with setting up and starting SpeechRecognition ---
+
+          // Use the existing instance or create a new one
+          if (!recognitionRef.current) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognitionRef.current = new SpeechRecognition();
+            recognitionRef.current.continuous = false;
+            recognitionRef.current.interimResults = false;
+            recognitionRef.current.lang = NATIVE_LANGUAGE === 'English' ? 'en-US' : 'kn-IN';
+
+            console.log("Created SpeechRecognition instance.");
+
+            recognitionRef.current.onstart = () => {
+              console.log("Speech recognition started.");
+              setIsListening(true);
+              setPermissionError('');
+            };
+
+            recognitionRef.current.onresult = (event) => {
+              const transcript = event.results[0][0].transcript;
+              console.log("Speech recognition result:", transcript);
+              setUserTranscript(transcript);
+            };
+
+            recognitionRef.current.onerror = (event) => {
+              console.error("Speech recognition error:", event.error);
+              let errorMsg = `Speech recognition error: ${event.error}`;
+              if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                errorMsg = "Microphone permission denied. Please enable microphone access in your browser settings.";
+                setPermissionError(errorMsg);
+              } else if (event.error === 'no-speech') {
+                errorMsg = "No speech detected. Please try again.";
+                // Don't set permissionError for no-speech, just log it maybe
+              } else {
+                setPermissionError(errorMsg);
+              }
+              setIsListening(false);
+            };
+
+            recognitionRef.current.onend = () => {
+              console.log("Speech recognition ended.");
+              setIsListening(false);
+              // Optional: Check if transcript is empty and it wasn't an error case already handled
+              // if (!userTranscript && !permissionError && event.error !== 'no-speech') {
+              //      console.log("Recognition ended without results.");
+              // }
+            };
+          }
+
+          // --- Attempt to start recognition ---
+          try {
+            console.log("Attempting to start recognition...");
+            recognitionRef.current.start();
+          } catch (error) {
+            console.error("Error starting speech recognition:", error);
+            setPermissionError("Could not start speech recognition.");
+            setIsListening(false);
+          }
+
+        })
+        .catch((err) => {
+          console.error("Error getting microphone permission:", err);
+          // Handle specific errors if needed (e.g., err.name === 'NotAllowedError')
+          setPermissionError("Microphone permission denied. Please enable microphone access in your browser settings.");
+          setIsListening(false);
+        });
+
+    } else {
+      console.warn("Speech Recognition API not supported in this browser.");
+      setPermissionError("Speech recognition is not supported in your browser.");
+      setIsListening(false);
+    }
+  }, [userTranscript, permissionError]); // Dependencies for useCallback
+
+  // --- Function to stop listening ---
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      console.log("Stopping speech recognition manually.");
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  }, []);
+
+  // --- Effect for cleanup ---
+  useEffect(() => {
+    // Return a cleanup function
+    return () => {
+      if (recognitionRef.current) {
+        console.log("Cleaning up speech recognition instance.");
+        recognitionRef.current.stop(); // Stop recognition if active
+        recognitionRef.current = null; // Release the instance
+      }
+    };
+  }, []); // Empty dependency array ensures this runs only on unmount
+
+  // --- Find your "Start Learning Kannada" button or equivalent ---
+  // Modify its onClick handler to call startListening
+
+  // Example: If you have a button that sets showDemo
+  const handleStartDemo = () => {
+    setShowDemo(true);
+    // You might want to trigger listening *after* the canvas/demo is shown,
+    // perhaps inside the TutorCanvas component or via another button there.
+    // OR, if the button *itself* should start listening:
+    // startListening();
+  };
+
+  // Example: If you have a dedicated microphone button inside SpeechControls or TutorCanvas
+  // You would pass `startListening`, `stopListening`, `isListening`, `userTranscript`, `permissionError`
+  // as props to that component and connect them to the button there.
 
   // --- UI Rendering ---
   return (
@@ -725,9 +856,27 @@ export default function Home() {
             nativeLanguage={NATIVE_LANGUAGE}
             kannadaVoiceFound={kannadaVoiceFound}
             setShowDemo={setShowDemo}
+            startListening={startListening}
+            stopListening={stopListening}
+            permissionError={permissionError}
           />
         </div>
       )}
+
+      {/* Example: Button to start the demo - adapt as needed */}
+      {!showDemo && (
+        <button onClick={handleStartDemo}>Start Learning Kannada</button>
+        /* OR if this button should directly start listening: */
+        /* <button onClick={startListening} disabled={isListening}>
+             {isListening ? 'Listening...' : 'Start Learning Kannada'}
+           </button> */
+      )}
+
+      {/* Display permission errors */}
+      {permissionError && <p style={{ color: 'red' }}>{permissionError}</p>}
+
+      {/* Display transcript */}
+      {userTranscript && <p>You said: {userTranscript}</p>}
     </main>
   );
 }
