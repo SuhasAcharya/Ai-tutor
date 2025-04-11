@@ -1,6 +1,8 @@
 'use client'; // Required for hooks and event handlers
 
-import '../polyfills.js'; // Use local polyfill instead
+// Remove the old polyfill import
+// import '../polyfills.js';
+import '../lib/polyfill';
 import 'regenerator-runtime/runtime';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -160,7 +162,7 @@ export default function Home() {
   };
 
   // --- Gemini API Interaction ---
-  const sendToGemini = async (message) => {
+  const sendToGemini = (message) => {
     if (!sessionId) {
       console.error("Session ID not set.");
       setLastError("Error: Cannot start chat without a session ID.");
@@ -172,83 +174,49 @@ export default function Home() {
     setAiResponse('...'); // Indicate loading
     setLastError(''); // Clear previous errors
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, sessionId }),
-      });
-
-      if (!response.ok) {
-        let errorData = { error: `HTTP error! status: ${response.status}` };
-        try {
-          const contentType = response.headers.get("content-type");
-          if (contentType && contentType.includes("application/json")) {
-            errorData = await response.json();
-          } else {
-            const errorText = await response.text();
-            console.error("Non-JSON error response from API:", errorText);
-            // Try to parse if it's stringified JSON
-            try {
-              const parsedText = JSON.parse(errorText);
-              if (parsedText && parsedText.error) {
-                errorData.error = parsedText.error;
-              } else {
-                errorData.error = errorText || errorData.error;
-              }
-            } catch (e) {
-              errorData.error = errorText || errorData.error;
-            }
-          }
-        } catch (parseError) {
-          console.error("Failed to parse or read error response body:", parseError);
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, sessionId }),
+    })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            throw new Error(text || `HTTP error! status: ${response.status}`);
+          });
         }
-        // Prepend "Error: " if not already present for consistency
-        const errorMessage = (errorData.error && !String(errorData.error).toLowerCase().startsWith('error:'))
-          ? `Error: ${errorData.error}`
-          : errorData.error || `Error: HTTP ${response.status}`;
-        throw new Error(errorMessage);
-      }
+        return response.json();
+      })
+      .then(data => {
+        console.log("Received from Gemini:", data.response);
+        setAiResponse(data.response);
+        cleanupSpeech();
 
-      const data = await response.json();
-      console.log("Received from Gemini:", data.response);
-      setAiResponse(data.response); // Set full response with emojis for UI display
+        const cleanText = removeEmojis(data.response);
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'kn-IN';
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          speechSynthesisRef.current = null;
+        };
+        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event);
+          setIsSpeaking(false);
+          speechSynthesisRef.current = null;
+        };
 
-      // Clean up any existing speech synthesis
-      cleanupSpeech();
-
-      // Create and store the utterance with emojis removed
-      const cleanText = removeEmojis(data.response);
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'kn-IN';
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        speechSynthesisRef.current = null;
-      };
-      utterance.onerror = (event) => {
-        console.error('Speech synthesis error:', event);
-        setIsSpeaking(false);
-        speechSynthesisRef.current = null;
-      };
-
-      // Store the utterance reference
-      speechSynthesisRef.current = utterance;
-
-      // Start speaking
-      setIsSpeaking(true);
-      window.speechSynthesis.speak(utterance);
-
-    } catch (error) {
-      console.error("Failed to send message to Gemini:", error);
-      // Ensure error message starts with "Error: "
-      const displayError = (error.message && !error.message.toLowerCase().startsWith('error:'))
-        ? `Error: ${error.message}`
-        : error.message || "Error: An unknown error occurred.";
-      setAiResponse(''); // Clear loading dots
-      setLastError(displayError); // Display the error
-      // Optionally stop chat on error
-      // setIsChatting(false);
-    }
+        speechSynthesisRef.current = utterance;
+        setIsSpeaking(true);
+        window.speechSynthesis.speak(utterance);
+      })
+      .catch(error => {
+        console.error("Failed to send message to Gemini:", error);
+        const displayError = error.message && !error.message.toLowerCase().startsWith('error:')
+          ? `Error: ${error.message}`
+          : error.message || "Error: An unknown error occurred.";
+        setAiResponse('');
+        setLastError(displayError);
+      });
   };
 
   // --- Handler for stopping the conversation ---

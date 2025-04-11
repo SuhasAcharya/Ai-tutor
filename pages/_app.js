@@ -1,4 +1,4 @@
-import '../polyfills.js'; // Use local polyfill instead
+import '../lib/polyfill';
 
 function MyApp({ Component, pageProps }) {
   return <Component {...pageProps} />;

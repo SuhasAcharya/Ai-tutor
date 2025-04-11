@@ -1,4 +1,3 @@
-import '../polyfills.js'; // Use local polyfill instead
 import "./globals.css";
 
 export const metadata = {
