@@ -356,11 +356,12 @@ export default function TutorCanvas({
         <div className="flex flex-col h-full">
           {/* Top nav bar - Simplified */}
           <div className="bg-indigo-900/60 backdrop-blur-sm p-4 flex justify-between items-center border-b border-indigo-700">
-            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-              </svg>
-              AI Kannada Tutor
+            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+              <div className="flex items-center gap-0.5  p-2 rounded-lg">
+                <span className="text-4xl font-bold text-orange-400">ಕ</span>
+                <span className="text-2xl font-bold text-pink-400 font-serif">A</span>
+              </div>
+              Namme Bhashe
             </h2>
 
             <div className="flex items-center gap-4">
@@ -395,7 +396,7 @@ export default function TutorCanvas({
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
-                <span>Back to Home</span>
+                <span className="hidden md:inline">Back to Home</span>
               </motion.button>
             </div>
           </div>
@@ -552,55 +553,54 @@ export default function TutorCanvas({
               <div className="w-full max-w-2xl mx-auto">
                 {/* Combined input and controls row */}
                 <form onSubmit={handleSubmit} className="flex items-center gap-2">
-                  {/* Voice control button */}
-                  {!isListening ? (
-                    <motion.button
-                      type="button"
-                      onClick={startListening}
-                      className="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-medium disabled:opacity-50"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      disabled={isSpeaking}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                      </svg>
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      type="button"
-                      onClick={stopListening}
-                      className="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg font-medium relative overflow-hidden"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      disabled={isSpeaking}
-                    >
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-full h-1 bg-white/20 animate-[listening_1.5s_ease-in-out_infinite]"></div>
-                      </div>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                      </svg>
-                    </motion.button>
-                  )}
+                  {/* Voice control button with tooltip */}
+                  <div className="relative group">
+                    {!isListening ? (
+                      <motion.button
+                        type="button"
+                        onClick={startListening}
+                        className="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-medium disabled:opacity-50"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        disabled={isSpeaking}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                      </motion.button>
+                    ) : (
+                      <motion.button
+                        type="button"
+                        onClick={stopListening}
+                        className="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg font-medium relative overflow-hidden"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        disabled={isSpeaking}
+                      >
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-full h-1 bg-white/20 animate-[listening_1.5s_ease-in-out_infinite]"></div>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      </motion.button>
+                    )}
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      {isSpeaking ? "AI is speaking..." : isListening ? "Click to stop listening" : "Click to start speaking"}
+                    </div>
+                  </div>
 
                   {/* Text input */}
                   <div className="flex-1 relative">
                     <input
                       type="text"
                       placeholder={`Type your message in ${nativeLanguage} or ${targetLanguage}...`}
-                      className="w-full p-3 md:p-4 rounded-lg bg-indigo-800/50 text-white border border-indigo-600 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                      className="w-full p-3 md:p-4 rounded-lg bg-indigo-800/50 text-white border border-indigo-600 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       value={message}
                       onChange={handleMessageChange}
                       disabled={isSpeaking || isListening}
                     />
-                    {(isSpeaking || isListening) && (
-                      <div className="absolute inset-0 bg-black/20 rounded-lg flex items-center justify-center">
-                        <span className="text-white/70 text-sm">
-                          {isSpeaking ? "AI is speaking..." : "Listening to your voice..."}
-                        </span>
-                      </div>
-                    )}
                   </div>
 
                   {/* Send button */}

@@ -60,11 +60,11 @@ export default function Home() {
           const found = voices.some(voice => voice.lang === 'kn-IN');
           setKannadaVoiceFound(found);
           if (!found) {
-             console.warn("No Kannada ('kn-IN') voice found during preload check.");
-             // Optionally set error here, but speak() also handles it
-             // setLastError("Warning: No Kannada voice available in your browser for speech output.");
+            console.warn("No Kannada ('kn-IN') voice found during preload check.");
+            // Optionally set error here, but speak() also handles it
+            // setLastError("Warning: No Kannada voice available in your browser for speech output.");
           } else {
-             console.log("Kannada voice found during preload check.");
+            console.log("Kannada voice found during preload check.");
           }
         };
       }
@@ -75,15 +75,15 @@ export default function Home() {
   // --- Restore Original Speech Synthesis Handling (using window.speechSynthesis) ---
   const speak = (text) => {
     if (!text || typeof window === 'undefined' || !window.speechSynthesis) {
-        setIsSpeaking(false); // Ensure speaking is false if we can't speak
-        return;
+      setIsSpeaking(false); // Ensure speaking is false if we can't speak
+      return;
     }
     if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-        // Add a tiny delay before starting new speech after cancelling
-        // This helps ensure the state update registers visually
-        setTimeout(() => startSpeech(text), 50);
-        return;
+      window.speechSynthesis.cancel();
+      // Add a tiny delay before starting new speech after cancelling
+      // This helps ensure the state update registers visually
+      setTimeout(() => startSpeech(text), 50);
+      return;
     }
     startSpeech(text);
   };
@@ -94,7 +94,7 @@ export default function Home() {
 
     if (!speakableText) {
       console.log("Skipping speech: only emojis or empty text.");
-      setIsSpeaking(false); // Ensure speaking is false if nothing to say
+      setIsSpeaking(false);
       return;
     }
 
@@ -109,19 +109,25 @@ export default function Home() {
     } else {
       if (kannadaVoiceFound !== false) setKannadaVoiceFound(false);
       if (!lastError.includes("No Kannada voice")) {
-          setLastError("Warning: No Kannada voice available in your browser for speech output.");
+        setLastError("Warning: No Kannada voice available in your browser for speech output.");
       }
     }
 
     utterance.pitch = 1;
-    utterance.rate = 0.65;
+    utterance.rate = 0.15;  // Extremely slow - 15% of normal speed
     utterance.volume = 1;
+
+    // Add very long pauses between words for maximum clarity
+    const wordsWithPauses = speakableText
+      .replace(/\s+/g, '.............. ');  // Much longer pauses (12 dots)
+
+    utterance.text = wordsWithPauses;
 
     utterance.onstart = () => {
       console.log("Browser TTS started");
       setIsSpeaking(true); // Set speaking true HERE
       if (!lastError.includes("No Kannada voice")) {
-          setLastError('');
+        setLastError('');
       }
     };
 
@@ -139,6 +145,11 @@ export default function Home() {
     utteranceRef.current = utterance;
     // setIsSpeaking(true); // Set speaking true BEFORE calling speak
     window.speechSynthesis.speak(utterance);
+  };
+
+  // Add a helper function to remove emojis
+  const removeEmojis = (text) => {
+    return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]/gu, '');
   };
 
   // --- Gemini API Interaction ---
@@ -171,36 +182,37 @@ export default function Home() {
             const errorText = await response.text();
             console.error("Non-JSON error response from API:", errorText);
             // Try to parse if it's stringified JSON
-             try {
-                const parsedText = JSON.parse(errorText);
-                if (parsedText && parsedText.error) {
-                    errorData.error = parsedText.error;
-                } else {
-                     errorData.error = errorText || errorData.error;
-                }
-             } catch (e) {
-                 errorData.error = errorText || errorData.error;
-             }
+            try {
+              const parsedText = JSON.parse(errorText);
+              if (parsedText && parsedText.error) {
+                errorData.error = parsedText.error;
+              } else {
+                errorData.error = errorText || errorData.error;
+              }
+            } catch (e) {
+              errorData.error = errorText || errorData.error;
+            }
           }
         } catch (parseError) {
           console.error("Failed to parse or read error response body:", parseError);
         }
         // Prepend "Error: " if not already present for consistency
         const errorMessage = (errorData.error && !String(errorData.error).toLowerCase().startsWith('error:'))
-            ? `Error: ${errorData.error}`
-            : errorData.error || `Error: HTTP ${response.status}`;
+          ? `Error: ${errorData.error}`
+          : errorData.error || `Error: HTTP ${response.status}`;
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      console.log("Received from Gemini:", data.response); // Will include emojis
-      setAiResponse(data.response); // Set state with emojis for UI display
+      console.log("Received from Gemini:", data.response);
+      setAiResponse(data.response); // Set full response with emojis for UI display
 
       // Clean up any existing speech synthesis
       cleanupSpeech();
 
-      // Create and store the utterance
-      const utterance = new SpeechSynthesisUtterance(data.response);
+      // Create and store the utterance with emojis removed
+      const cleanText = removeEmojis(data.response);
+      const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'kn-IN';
       utterance.onend = () => {
         setIsSpeaking(false);
@@ -214,7 +226,7 @@ export default function Home() {
 
       // Store the utterance reference
       speechSynthesisRef.current = utterance;
-      
+
       // Start speaking
       setIsSpeaking(true);
       window.speechSynthesis.speak(utterance);
@@ -262,54 +274,127 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       {!showDemo ? (
-        <div className="bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 min-h-screen">
-          <div className="container mx-auto px-4 py-20">
-            <motion.nav 
+        <div className="bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 min-h-screen relative overflow-hidden">
+          {/* Floating Kannada Text Background */}
+          <div className="absolute inset-0 overflow-hidden">
+            <motion.div
+              className="absolute inset-0 opacity-20"
+              animate={{
+                y: [-20, 20],
+                transition: {
+                  repeat: Infinity,
+                  repeatType: "reverse",
+                  duration: 20,
+                  ease: "linear"
+                }
+              }}
+            >
+              <div className="grid grid-cols-4 gap-8 p-8 transform rotate-12">
+                {[
+                  "ನಮಸ್ಕಾರ",
+                  "ಕನ್ನಡ",
+                  "ಹೇಗಿದ್ದೀರಾ",
+                  "ಶುಭದಿನ",
+                  "ಧನ್ಯವಾದ",
+                  "ಸ್ವಾಗತ",
+                  "ಕಲಿಯೋಣ",
+                  "ಭಾಷೆ",
+                  "ಸಂಸ್ಕೃತಿ",
+                  "ಕರ್ನಾಟಕ",
+                  "ಬೆಂಗಳೂರು",
+                  "ಮೈಸೂರು"
+                ].map((text, i) => (
+                  <motion.div
+                    key={i}
+                    className="text-4xl md:text-6xl font-bold text-white/20 whitespace-nowrap"
+                    animate={{
+                      y: [(i % 2) * 20, (i % 2) * -20],
+                      x: [(i % 3) * 10, (i % 3) * -10],
+                      transition: {
+                        repeat: Infinity,
+                        repeatType: "reverse",
+                        duration: 10 + (i % 5),
+                        ease: "easeInOut"
+                      }
+                    }}
+                  >
+                    {text}
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Content */}
+          <div className="container mx-auto px-4 py-20 relative">
+            <motion.nav
               className="flex justify-between items-center mb-16"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <motion.div 
+              <motion.div
                 className="text-2xl font-bold text-white"
                 whileHover={{ scale: 1.05 }}
               >
-                AI Tutor
+                <div className="flex items-center gap-0.5  p-2 rounded-lg">
+                  <span className="text-5xl font-bold text-orange-400">ಕ</span>
+                  <span className="text-3xl font-bold text-pink-400 font-serif">A</span>
+                </div>
+                Namma Bhashe
               </motion.div>
               <div className="flex gap-6">
-                <motion.a 
-                  href="#features" 
-                  className="text-white hover:text-pink-200 transition"
+                <motion.button
+                  onClick={() => {
+                    document.getElementById('features')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start'
+                    });
+                  }}
+                  className="text-white hover:text-pink-200 transition cursor-pointer"
                   whileHover={{ scale: 1.05 }}
                 >
                   Features
-                </motion.a>
-                <motion.a 
-                  href="#pricing" 
-                  className="text-white hover:text-pink-200 transition"
-                  whileHover={{ scale: 1.05 }}
-                >
-                  Pricing
-                </motion.a>
-                <motion.a 
-                  href="#about" 
-                  className="text-white hover:text-pink-200 transition"
+                </motion.button>
+                <motion.button
+                  onClick={() => {
+                    document.getElementById('about')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start'
+                    });
+                  }}
+                  className="text-white hover:text-pink-200 transition cursor-pointer"
                   whileHover={{ scale: 1.05 }}
                 >
                   About
-                </motion.a>
+                </motion.button>
+                <motion.button
+                  onClick={() => {
+                    document.getElementById('support')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start'
+                    });
+                  }}
+                  className="text-white hover:text-pink-200 transition cursor-pointer"
+                  whileHover={{ scale: 1.05 }}
+                >
+                  Support
+                </motion.button>
               </div>
             </motion.nav>
 
             <div className="flex flex-col md:flex-row gap-12 items-center">
-              <motion.div 
+              <motion.div
                 className="md:w-1/2"
                 initial={{ opacity: 0, x: -50 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.7, delay: 0.2 }}
               >
                 <h1 className="text-5xl md:text-6xl font-bold text-white leading-tight mb-6">
-                  Learn Faster with <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-yellow-300">AI-Powered</span> Tutoring
+                  Learn Faster with<br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-yellow-300">
+                    AI-Powered
+                  </span> Tutoring
                 </h1>
                 <p className="text-xl text-indigo-100 mb-8">
                   Get personalized guidance, instant feedback, and interactive learning experiences tailored to your unique needs.
@@ -327,13 +412,20 @@ export default function Home() {
                     className="px-8 py-4 bg-transparent border-2 border-white text-white font-bold rounded-full text-lg"
                     whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
                     whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      // Smooth scroll to About section
+                      document.getElementById('about')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                      });
+                    }}
                   >
                     Learn More
                   </motion.button>
                 </div>
               </motion.div>
 
-              <motion.div 
+              {/* <motion.div 
                 className="md:w-1/2"
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -349,20 +441,20 @@ export default function Home() {
                     }}
                   />
                 </div>
-              </motion.div>
+              </motion.div> */}
             </div>
 
-            <motion.div 
+            <motion.div
               className="mt-32 text-center"
               id="features"
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.6 }}
             >
-              <h2 className="text-3xl font-bold text-white mb-16">Why Choose Our AI Tutor?</h2>
-              
+              <h2 className="text-3xl font-bold text-white mb-16">Why Choose Namma Bhashe?</h2>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <motion.div 
+                <motion.div
                   className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
                   whileHover={{ y: -10, backgroundColor: "rgba(255, 255, 255, 0.15)" }}
                 >
@@ -374,8 +466,8 @@ export default function Home() {
                   <h3 className="text-xl font-bold text-white mb-3">Personalized Learning</h3>
                   <p className="text-indigo-100">Adaptive learning path that adjusts to your knowledge level and learning style.</p>
                 </motion.div>
-                
-                <motion.div 
+
+                <motion.div
                   className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
                   whileHover={{ y: -10, backgroundColor: "rgba(255, 255, 255, 0.15)" }}
                 >
@@ -387,8 +479,8 @@ export default function Home() {
                   <h3 className="text-xl font-bold text-white mb-3">Learn At Your Pace</h3>
                   <p className="text-indigo-100">No time constraints. Practice and learn whenever it's convenient for you.</p>
                 </motion.div>
-                
-                <motion.div 
+
+                <motion.div
                   className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
                   whileHover={{ y: -10, backgroundColor: "rgba(255, 255, 255, 0.15)" }}
                 >
@@ -402,9 +494,167 @@ export default function Home() {
                 </motion.div>
               </div>
             </motion.div>
+
+            <motion.div
+              className="mt-32 text-center"
+              id="about"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.6 }}
+            >
+              <h2 className="text-3xl font-bold text-white mb-8">About Learning Kannada</h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left max-w-6xl mx-auto">
+                <motion.div
+                  className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
+                  whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+                >
+                  <h3 className="text-xl font-bold text-white mb-4">What is Kannada?</h3>
+                  <p className="text-indigo-100 leading-relaxed">
+                    Kannada (ಕನ್ನಡ) is one of the major Dravidian languages of India, primarily spoken in the state of Karnataka.
+                    With a rich literary history spanning over a millennium, it's the native language of about 45 million people
+                    and is known for its melodious nature and cultural significance.
+                  </p>
+                </motion.div>
+
+                <motion.div
+                  className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
+                  whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+                >
+                  <h3 className="text-xl font-bold text-white mb-4">Why Learn Kannada?</h3>
+                  <p className="text-indigo-100 leading-relaxed">
+                    Learning Kannada opens doors to Karnataka's rich culture, from its classical music and dance to its thriving
+                    tech hub in Bangalore. Whether you're relocating for work, interested in South Indian culture, or connecting
+                    with Kannada-speaking communities, our AI tutor helps make the learning journey engaging and effective.
+                  </p>
+                </motion.div>
+
+                <motion.div
+                  className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
+                  whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+                >
+                  <h3 className="text-xl font-bold text-white mb-4">Our Teaching Approach</h3>
+                  <p className="text-indigo-100 leading-relaxed">
+                    Our AI tutor combines modern language learning techniques with cultural context. You'll learn through
+                    natural conversations, getting instant feedback on pronunciation and grammar. The system adapts to your
+                    pace and focuses on practical, everyday Kannada that you can use immediately.
+                  </p>
+                </motion.div>
+
+                <motion.div
+                  className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
+                  whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+                >
+                  <h3 className="text-xl font-bold text-white mb-4">Getting Started</h3>
+                  <p className="text-indigo-100 leading-relaxed">
+                    Begin with basic greetings and everyday phrases, gradually building your vocabulary and confidence.
+                    Our AI tutor provides a supportive environment where you can practice speaking and listening without
+                    judgment, making mistakes and learning from them at your own pace.
+                  </p>
+                </motion.div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              className="mt-32 text-center"
+              id="support"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.7, delay: 0.8 }}
+            >
+              <motion.div
+                className="bg-gradient-to-br from-indigo-800/50 via-purple-800/30 to-indigo-900/50 p-8 md:p-12 rounded-2xl backdrop-blur-sm border border-indigo-600/30 max-w-2xl mx-auto shadow-xl"
+              >
+                <div className="flex items-center justify-center gap-3 mb-6">
+                  <motion.span
+                    className="text-5xl"
+                    animate={{
+                      rotate: [0, -15, 15, -15, 0],
+                      y: [0, -5, 0]
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      repeatDelay: 3
+                    }}
+                  >
+                    🍺
+                  </motion.span>
+                  <h3 className="text-white font-bold text-3xl bg-gradient-to-r from-yellow-200 to-amber-400 text-transparent bg-clip-text">
+                    Buy Me a Beer
+                  </h3>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                  <motion.p
+                    className="text-white/90 text-xl font-medium"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    Help keep this Kannada tutor running smoothly!
+                  </motion.p>
+                  <motion.p
+                    className="text-white/70 leading-relaxed"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    Your support helps maintain the servers, improve the AI, and maybe get me a cold one!
+                    Every beer counts towards making Kannada learning accessible to everyone.
+                  </motion.p>
+                  <motion.p
+                    className="text-amber-300/90 text-lg font-medium"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                  >
+                    ಕನ್ನಡಕ್ಕಾಗಿ ಒಂದು ಬೀರು! 🍻
+                  </motion.p>
+                </div>
+
+                <motion.div
+                  className="bg-gradient-to-r from-indigo-900/80 via-purple-900/80 to-indigo-900/80 p-5 rounded-xl text-white/90 font-mono text-lg select-all cursor-pointer max-w-md mx-auto border border-indigo-500/30"
+                  whileTap={{ scale: 0.98 }}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText('suhas.acharya3@ybl');
+                      const messageDiv = document.createElement('div');
+                      messageDiv.textContent = '🍻 Cheers! UPI ID Copied!';
+                      messageDiv.className = 'absolute -top-12 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-sans animate-bounce';
+                      document.getElementById('upi-container').appendChild(messageDiv);
+                      setTimeout(() => messageDiv.remove(), 2000);
+                    } catch (err) {
+                      console.error('Failed to copy:', err);
+                    }
+                  }}
+                >
+                  <div id="upi-container" className="relative">
+                    <div className="flex items-center justify-center gap-3">
+                      <span className="text-pink-400 font-semibold">UPI ID:</span>
+                      <span className="font-medium tracking-wide">suhas.acharya3@ybl</span>
+                    </div>
+                    <div className="text-xs text-white/50 mt-2">
+                      Click to copy
+                    </div>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  className="mt-8 text-white/60 text-sm space-y-2"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.8 }}
+                >
+                  <p className="text-white/80">Thank you for supporting Kannada language education! 🙏</p>
+                  <p className="text-amber-300/80 font-medium">ಧನ್ಯವಾದಗಳು! ಆರೋಗ್ಯ!</p>
+                  <p className="text-white/60">(Dhanyavādagaḷu! Cheers!)</p>
+                </motion.div>
+              </motion.div>
+            </motion.div>
           </div>
-          
-          <motion.div 
+
+          {/* <motion.div
             className="py-16 mt-16 bg-gradient-to-t from-black/50 to-transparent"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -421,11 +671,70 @@ export default function Home() {
                 Get Started Now
               </motion.button>
             </div>
+          </motion.div> */}
+
+          {/* Original Footer */}
+          <motion.div
+            className="bg-indigo-900/80 backdrop-blur-sm border-t border-indigo-700 py-6 px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.7, delay: 1 }}
+          >
+            <div className="max-w-4xl mx-auto text-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="text-white/90 text-lg font-medium">
+                  ಕನ್ನಡ ಕಲಿಯಿರಿ, ಕನ್ನಡ ಬಾಳಿರಿ 🌟
+                </div>
+
+                <p className="text-white/70">
+                  Created with{' '}
+                  <span className="text-pink-400 animate-pulse inline-block">❤️</span>
+                  {' '}by Suhas Acharya
+                </p>
+                <p className="text-white/60 max-w-2xl mx-auto text-sm">
+                  Dedicated to preserving and promoting the beautiful Kannada language.
+                  Let's work together to keep our rich linguistic heritage alive and thriving.
+                  Every new learner adds to the vibrant tapestry of Karnataka's culture.
+                </p>
+                <div className="flex gap-4 text-white/50 text-sm mt-2">
+                  <button
+                    onClick={() => {
+                      document.getElementById('about')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                      });
+                    }}
+                    className="hover:text-white/80 transition-colors cursor-pointer"
+                  >
+                    About
+                  </button>
+                  <span>•</span>
+                  <a
+                    href="mailto:suhasacharya2000@gmail.com"
+                    className="hover:text-white/80 transition-colors"
+                  >
+                    Contact
+                  </a>
+                  <span>•</span>
+                  <button
+                    onClick={() => {
+                      document.getElementById('support')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                      });
+                    }}
+                    className="hover:text-white/80 transition-colors cursor-pointer"
+                  >
+                    Support
+                  </button>
+                </div>
+              </div>
+            </div>
           </motion.div>
         </div>
       ) : (
         <div className="min-h-screen">
-          <TutorCanvas 
+          <TutorCanvas
             isSpeaking={isSpeaking}
             isListening={isListening}
             userTranscript={userTranscript}
