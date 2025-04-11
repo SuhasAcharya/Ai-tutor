@@ -1,5 +1,6 @@
 'use client'; // Required for hooks and event handlers
 
+import '../polyfills.js'; // Use local polyfill instead
 import 'regenerator-runtime/runtime';
 
 import React, { useState, useEffect, useRef } from 'react';
