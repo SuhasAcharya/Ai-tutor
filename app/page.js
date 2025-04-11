@@ -250,93 +250,94 @@ export default function Home() {
 
   // --- Function to handle starting speech recognition ---
   const startListening = useCallback(() => {
-    setPermissionError(''); // Clear previous errors
-    setUserTranscript(''); // Clear previous transcript
+    console.log("--- startListening called ---"); // Log entry
+    setPermissionError('');
+    setUserTranscript('');
 
-    // Check for browser support first
     if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-      console.log("Speech Recognition API supported.");
+      console.log("Speech Recognition API available.");
 
       // --- Explicitly request microphone permission first ---
+      console.log("Attempting navigator.mediaDevices.getUserMedia...");
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then((stream) => {
-          console.log("Microphone permission granted.");
-          // Important: Stop the track immediately if you only need permission
+          console.log("getUserMedia promise resolved successfully.");
           stream.getTracks().forEach(track => track.stop());
+          console.log("Mic stream tracks stopped.");
 
-          // --- Now proceed with setting up and starting SpeechRecognition ---
-
-          // Use the existing instance or create a new one
+          // --- Setup SpeechRecognition ---
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
           if (!recognitionRef.current) {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            console.log("Creating new SpeechRecognition instance.");
             recognitionRef.current = new SpeechRecognition();
             recognitionRef.current.continuous = false;
             recognitionRef.current.interimResults = false;
             recognitionRef.current.lang = NATIVE_LANGUAGE === 'English' ? 'en-US' : 'kn-IN';
-
-            console.log("Created SpeechRecognition instance.");
+            console.log("SpeechRecognition instance created with lang:", recognitionRef.current.lang);
 
             recognitionRef.current.onstart = () => {
-              console.log("Speech recognition started.");
+              console.log(">>> Recognition Started (onstart event)");
               setIsListening(true);
               setPermissionError('');
             };
 
             recognitionRef.current.onresult = (event) => {
+              console.log(">>> Recognition Result (onresult event):", event.results);
               const transcript = event.results[0][0].transcript;
-              console.log("Speech recognition result:", transcript);
               setUserTranscript(transcript);
             };
 
             recognitionRef.current.onerror = (event) => {
-              console.error("Speech recognition error:", event.error);
+              // Log the *entire* event object for more details
+              console.error(">>> Recognition Error (onerror event):", event);
               let errorMsg = `Speech recognition error: ${event.error}`;
               if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
                 errorMsg = "Microphone permission denied. Please enable microphone access in your browser settings.";
                 setPermissionError(errorMsg);
               } else if (event.error === 'no-speech') {
                 errorMsg = "No speech detected. Please try again.";
-                // Don't set permissionError for no-speech, just log it maybe
               } else {
+                // Add more details if available
+                errorMsg = `Speech recognition error: ${event.error}${event.message ? ` (${event.message})` : ''}`;
                 setPermissionError(errorMsg);
               }
               setIsListening(false);
             };
 
             recognitionRef.current.onend = () => {
-              console.log("Speech recognition ended.");
+              console.log(">>> Recognition Ended (onend event)");
               setIsListening(false);
-              // Optional: Check if transcript is empty and it wasn't an error case already handled
-              // if (!userTranscript && !permissionError && event.error !== 'no-speech') {
-              //      console.log("Recognition ended without results.");
-              // }
             };
+          } else {
+            console.log("Reusing existing SpeechRecognition instance.");
           }
 
           // --- Attempt to start recognition ---
           try {
-            console.log("Attempting to start recognition...");
+            console.log("Calling recognitionRef.current.start()...");
             recognitionRef.current.start();
+            console.log("recognitionRef.current.start() called without immediate error.");
           } catch (error) {
-            console.error("Error starting speech recognition:", error);
-            setPermissionError("Could not start speech recognition.");
+            console.error("!!! Error caught during recognitionRef.current.start():", error);
+            setPermissionError("Could not start speech recognition (catch block).");
             setIsListening(false);
           }
 
         })
         .catch((err) => {
-          console.error("Error getting microphone permission:", err);
-          // Handle specific errors if needed (e.g., err.name === 'NotAllowedError')
-          setPermissionError("Microphone permission denied. Please enable microphone access in your browser settings.");
+          console.error("!!! getUserMedia promise rejected:", err.name, err.message);
+          // Use alert for immediate feedback on mobile if console isn't visible
+          alert(`Mic Permission Error: ${err.name}. Check Browser Settings.`);
+          setPermissionError(`Microphone permission failed: ${err.name}. Please check browser site settings.`);
           setIsListening(false);
         });
 
     } else {
-      console.warn("Speech Recognition API not supported in this browser.");
-      setPermissionError("Speech recognition is not supported in your browser.");
+      console.warn("Speech Recognition API not supported.");
+      setPermissionError("Speech recognition is not supported in this browser.");
       setIsListening(false);
     }
-  }, [userTranscript, permissionError]); // Dependencies for useCallback
+  }, [userTranscript, permissionError, NATIVE_LANGUAGE]); // Added NATIVE_LANGUAGE dependency
 
   // --- Function to stop listening ---
   const stopListening = useCallback(() => {
@@ -877,7 +878,41 @@ export default function Home() {
       {/* Display transcript */}
       {userTranscript && <p>You said: {userTranscript}</p>}
 
-      {/* --- TEMPORARY TEST BUTTON --- */}
+      {/* --- TEMPORARY TEST BUTTON (SPEECH RECOGNITION) --- */}
+      <button style={{ border: '2px solid blue', padding: '10px', margin: '10px', display: 'block' }} onClick={() => {
+        console.log("Direct Start Listening Button Clicked!"); // Log click
+        startListening(); // Call the function directly
+      }} disabled={isListening}>
+        {isListening ? 'Listening (Direct Test)...' : 'Test Start Listening Directly'}
+      </button>
+      {/* --- END TEMPORARY TEST BUTTON --- */}
+
+      {/* --- TEMPORARY TEST BUTTON (GETUSERMEDIA ONLY) --- */}
+      <button style={{ border: '2px solid green', padding: '10px', margin: '10px', display: 'block' }} onClick={() => {
+        console.log("Direct GetUserMedia Button Clicked!");
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+              console.log("getUserMedia SUCCESS! Permission likely granted or prompted.");
+              alert("getUserMedia SUCCESS! Mic access seems okay."); // Alert for visibility
+              stream.getTracks().forEach(track => track.stop()); // Clean up
+            })
+            .catch(err => {
+              console.error("Direct getUserMedia FAILED:", err.name, err.message);
+              alert(`getUserMedia FAILED: ${err.name} - ${err.message}`); // Alert for visibility
+              setPermissionError(`Mic Test Failed: ${err.name}. Check browser settings.`);
+            });
+        } else {
+          alert("getUserMedia is not supported in this browser.");
+          console.error("getUserMedia not supported.");
+          setPermissionError("Mic access API not supported.");
+        }
+      }}>
+        Test Mic Permission Directly (getUserMedia)
+      </button>
+      {/* --- END TEMPORARY TEST BUTTON --- */}
+
+      {/* --- TEMPORARY TEST BUTTON (SPEECH SYNTHESIS) --- */}
       <button style={{ border: '1px solid red', padding: '10px', margin: '10px' }} onClick={() => {
         if (typeof window !== 'undefined' && window.speechSynthesis) {
           console.log("Attempting test speech...");
