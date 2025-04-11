@@ -1,9 +1,9 @@
-import { withTranspileModules } from 'next-transpile-modules';
+import withTM from 'next-transpile-modules';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     // Add any other configurations you need (if any)
-    webpack: (config, { isServer, webpack }) => {
+    webpack: (config) => {
         // Add this to ensure regenerator-runtime is properly included
         config.resolve.alias = {
             ...config.resolve.alias,
@@ -14,4 +14,4 @@ const nextConfig = {
 }
 
 // Export the config with transpilation for specific modules
-export default withTranspileModules(['regenerator-runtime'])(nextConfig);
+export default withTM(['regenerator-runtime'])(nextConfig);
