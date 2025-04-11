@@ -1,12 +1,16 @@
 'use client'; // Required for hooks and event handlers
 
 import React, { useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic'; // Import dynamic
+import dynamicImport from 'next/dynamic'; // Import dynamic and rename it
 import { v4 as uuidv4 } from 'uuid'; // For session ID
 import CssAvatar from '../components/CssAvatar'; // Import the new CSS Avatar component
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import TutorCanvas from '../components/TutorCanvas';
+
+// --- Add this line ---
+export const dynamic = 'force-dynamic';
+// --- End Add this line ---
 
 // --- Define Languages Here ---
 const TARGET_LANGUAGE = "Kannada";
@@ -23,7 +27,7 @@ const SpeechControlsLoading = () => <div className="w-full h-full flex items-cen
 // });
 
 // --- Keep SpeechControls dynamic import ---
-const SpeechControls = dynamic(() => import('../components/SpeechControls'), {
+const SpeechControls = dynamicImport(() => import('../components/SpeechControls'), {
   ssr: false,
   loading: SpeechControlsLoading
 });
