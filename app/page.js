@@ -4,21 +4,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic'; // Import dynamic
 import { v4 as uuidv4 } from 'uuid'; // For session ID
 
-// --- Define Loading Components Consistently ---
-// These will be rendered on the server AND on the initial client render pass
+// --- Restore TutorCanvasLoading ---
 const TutorCanvasLoading = () => <div className="w-full h-64 md:h-full flex items-center justify-center bg-gray-200 rounded-lg"><p>Loading 3D Viewer...</p></div>;
 const SpeechControlsLoading = () => <div className="w-full h-full flex items-center justify-center p-4 bg-white bg-opacity-80 rounded-lg shadow-lg"><p className="text-gray-500">Loading controls...</p></div>;
 
-// --- Dynamically import the Canvas component ---
+// --- Restore TutorCanvas dynamic import ---
 const TutorCanvas = dynamic(() => import('../components/TutorCanvas'), {
-  ssr: false, // This is the key: disable server-side rendering
-  loading: TutorCanvasLoading // Use the consistent loading component
+  ssr: false,
+  loading: TutorCanvasLoading
 });
 
-// --- Dynamically import the SpeechControls component ---
+// --- Keep SpeechControls dynamic import ---
 const SpeechControls = dynamic(() => import('../components/SpeechControls'), {
-    ssr: false, // Disable SSR for this component
-    loading: SpeechControlsLoading // Use the consistent loading component
+    ssr: false,
+    loading: SpeechControlsLoading
 });
 
 // --- Main Page Component ---
@@ -137,7 +136,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-grow flex flex-col md:flex-row items-center justify-center p-4 gap-4">
-        {/* --- Use the dynamically imported component --- */}
+        {/* --- Restore 3D Canvas Area --- */}
         <div className="w-full md:w-1/2 h-64 md:h-full">
            {/* Render placeholder on server & initial client render.
                Render actual component only after client mount. */}

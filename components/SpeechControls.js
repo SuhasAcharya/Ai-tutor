@@ -1,10 +1,10 @@
 'use client'; // This component uses client-side hooks and APIs
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 
 export default function SpeechControls({
-  isSpeaking,
+  isSpeaking,  // Whether the AI is currently speaking
   isChatting,
   aiResponse,
   userTranscript, // Receive state from parent
@@ -21,7 +21,7 @@ export default function SpeechControls({
     isMicrophoneAvailable,
   } = useSpeechRecognition();
 
-  // Effect to update parent state when transcript/listening changes
+  // Update parent state when transcript/listening changes
   useEffect(() => {
     setUserTranscript(transcript);
   }, [transcript, setUserTranscript]);
@@ -29,6 +29,47 @@ export default function SpeechControls({
   useEffect(() => {
     setIsListening(listening);
   }, [listening, setIsListening]);
+
+  // Pause listening while AI is speaking
+  useEffect(() => {
+    if (isSpeaking && listening) {
+      SpeechRecognition.stopListening();
+    } else if (!isSpeaking && isChatting && !listening) {
+      // Resume listening when AI stops speaking
+      SpeechRecognition.startListening({
+        continuous: true,
+        interimResults: true,
+        language: 'en-US'
+      });
+    }
+  }, [isSpeaking, isChatting, listening]);
+
+  // Process speech after a brief pause in speaking
+  const processTranscript = useCallback(() => {
+    if (transcript.trim()) {
+      sendToGemini(transcript);
+      resetTranscript();
+    }
+  }, [transcript, sendToGemini, resetTranscript]);
+
+  // Set up continuous speech recognition with real-time processing
+  useEffect(() => {
+    let timeoutId;
+
+    if (isChatting && transcript && !isSpeaking) {  // Only process when AI is not speaking
+      // Clear any existing timeout
+      if (timeoutId) clearTimeout(timeoutId);
+
+      // Set a new timeout to process after 1.5 seconds of silence
+      timeoutId = setTimeout(() => {
+        processTranscript();
+      }, 1500);
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [transcript, isChatting, isSpeaking, processTranscript]);
 
   const startListeningHandler = () => {
     if (!browserSupportsSpeechRecognition) {
@@ -39,31 +80,26 @@ export default function SpeechControls({
       alert("Microphone is not available or permission denied.");
       return;
     }
+
     resetTranscript();
-    setUserTranscript(''); // Clear transcript in parent state via setter
-    // setAiResponse(''); // Let parent handle clearing AI response if needed
-    window.speechSynthesis.getVoices(); // Ensure voices are loaded
+    setUserTranscript('');
+    window.speechSynthesis.getVoices();
     SpeechRecognition.startListening({
       continuous: true,
       interimResults: true,
       language: 'en-US'
     });
-    setIsChatting(true); // Update parent state
+    setIsChatting(true);
   };
 
-  const stopListeningAndProcessHandler = async () => {
+  const stopConversation = () => {
     SpeechRecognition.stopListening();
-    // Use the transcript directly from the hook here, as it's the most up-to-date
-    if (transcript.trim()) {
-      await sendToGemini(transcript); // Call parent's handler
-    } else {
-      setIsChatting(false); // Update parent state
-    }
-    resetTranscript(); // Reset local transcript
-    // setUserTranscript(''); // Parent state already cleared on startListening
+    setIsChatting(false);
+    setIsListening(false);
+    resetTranscript();
+    setUserTranscript('');
   };
 
-  // Render the controls UI
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white bg-opacity-80 rounded-lg shadow-lg">
       {!isChatting ? (
@@ -77,20 +113,14 @@ export default function SpeechControls({
       ) : (
         <div className="w-full text-center">
           <button
-            onClick={listening ? stopListeningAndProcessHandler : startListeningHandler}
-            disabled={isSpeaking || !browserSupportsSpeechRecognition || !isMicrophoneAvailable}
-            className={`px-6 py-3 rounded-full text-white font-semibold transition duration-300 shadow-md ${
-              listening
-                ? 'bg-red-500 hover:bg-red-600 animate-pulse'
-                : 'bg-green-500 hover:bg-green-600'
-            } ${(isSpeaking || !browserSupportsSpeechRecognition || !isMicrophoneAvailable) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={stopConversation}
+            className="px-6 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition duration-300 text-sm font-semibold shadow-md"
           >
-            {listening ? 'Stop Listening' : 'Start Listening'}
+            Stop Conversation
           </button>
 
           <div className="mt-4 p-4 border rounded-lg bg-gray-50 min-h-[100px] text-left">
             <p className="font-semibold text-gray-600">You said:</p>
-            {/* Display transcript state from parent */}
             <p className="text-gray-800">{userTranscript || (listening ? 'Listening...' : '...')}</p>
           </div>
 
@@ -98,6 +128,19 @@ export default function SpeechControls({
             <p className="font-semibold text-blue-600">Tutor says:</p>
             <p className="text-gray-800">{aiResponse || '...'}</p>
           </div>
+
+          {listening && !isSpeaking && (
+            <div className="mt-4 flex items-center justify-center space-x-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-sm text-gray-600">Listening...</span>
+            </div>
+          )}
+          {isSpeaking && (
+            <div className="mt-4 flex items-center justify-center space-x-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-sm text-gray-600">AI Speaking...</span>
+            </div>
+          )}
 
           {!browserSupportsSpeechRecognition && (
             <p className="text-red-500 mt-4">Speech recognition not supported in this browser.</p>
