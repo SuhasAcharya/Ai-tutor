@@ -3,7 +3,6 @@
 // Remove the old polyfill import
 // import '../polyfills.js';
 import '../lib/polyfill';
-import 'regenerator-runtime/runtime';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dynamicImport from 'next/dynamic'; // Import dynamic and rename it
