@@ -3,21 +3,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic'; // Import dynamic
 import { v4 as uuidv4 } from 'uuid'; // For session ID
+import CssAvatar from '../components/CssAvatar'; // Import the new CSS Avatar component
+import { motion } from 'framer-motion';
+import Link from 'next/link';
+import TutorCanvas from '../components/TutorCanvas';
 
 // --- Define Languages Here ---
 const TARGET_LANGUAGE = "Kannada";
 const NATIVE_LANGUAGE = "English";
 // --- End Language Definition ---
 
-// --- Restore TutorCanvasLoading ---
-const TutorCanvasLoading = () => <div className="w-full h-64 md:h-full flex items-center justify-center bg-gray-200 rounded-lg"><p>Loading 3D Viewer...</p></div>;
+// --- Remove TutorCanvasLoading and dynamic import ---
+// const TutorCanvasLoading = () => <div className="w-full h-64 md:h-full flex items-center justify-center bg-gray-200 rounded-lg"><p>Loading 3D Viewer...</p></div>;
 const SpeechControlsLoading = () => <div className="w-full h-full flex items-center justify-center p-4 bg-white bg-opacity-80 rounded-lg shadow-lg"><p className="text-gray-500">Loading controls...</p></div>;
 
-// --- Restore TutorCanvas dynamic import ---
-const TutorCanvas = dynamic(() => import('../components/TutorCanvas'), {
-  ssr: false,
-  loading: TutorCanvasLoading
-});
+// const TutorCanvas = dynamic(() => import('../components/TutorCanvas'), {
+//   ssr: false,
+//   loading: TutorCanvasLoading
+// });
 
 // --- Keep SpeechControls dynamic import ---
 const SpeechControls = dynamic(() => import('../components/SpeechControls'), {
@@ -37,6 +40,8 @@ export default function Home() {
   const [kannadaVoiceFound, setKannadaVoiceFound] = useState(null); // null: unchecked, true: found, false: not found
   const [lastError, setLastError] = useState(''); // Store last error message
   const utteranceRef = useRef(null); // Ref for the current speech synthesis utterance
+  const [showDemo, setShowDemo] = useState(false);
+  const speechSynthesisRef = useRef(null);
 
   // --- Effect to set isClient to true after mounting ---
   useEffect(() => {
@@ -50,89 +55,90 @@ export default function Home() {
         // Add an event listener for when voices change (important for some browsers)
         window.speechSynthesis.onvoiceschanged = () => {
           console.log("Voices loaded/changed.");
-          // You could potentially re-check for Kannada voice here if needed
+          // Re-check for Kannada voice here if needed, or let speak() handle it
+          const voices = window.speechSynthesis.getVoices();
+          const found = voices.some(voice => voice.lang === 'kn-IN');
+          setKannadaVoiceFound(found);
+          if (!found) {
+             console.warn("No Kannada ('kn-IN') voice found during preload check.");
+             // Optionally set error here, but speak() also handles it
+             // setLastError("Warning: No Kannada voice available in your browser for speech output.");
+          } else {
+             console.log("Kannada voice found during preload check.");
+          }
         };
       }
     }, 500); // Adjust delay if needed
     return () => clearTimeout(timer); // Cleanup timer
   }, []); // Empty dependency array ensures this runs only once on mount
 
-  // --- Speech Synthesis Handling ---
+  // --- Restore Original Speech Synthesis Handling (using window.speechSynthesis) ---
   const speak = (text) => {
-    if (!text || typeof window === 'undefined' || !window.speechSynthesis) return;
-
-    if (window.speechSynthesis.speaking) {
-        console.log("Interrupting previous speech.");
-        window.speechSynthesis.cancel();
+    if (!text || typeof window === 'undefined' || !window.speechSynthesis) {
+        setIsSpeaking(false); // Ensure speaking is false if we can't speak
+        return;
     }
+    if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        // Add a tiny delay before starting new speech after cancelling
+        // This helps ensure the state update registers visually
+        setTimeout(() => startSpeech(text), 50);
+        return;
+    }
+    startSpeech(text);
+  };
 
-    // --- Filtering step (removes emojis) ---
+  const startSpeech = (text) => {
     const emojiRegex = /([\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F700}-\u{1F77F}]|[\u{1F780}-\u{1F7FF}]|[\u{1F800}-\u{1F8FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA70}-\u{1FAFF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{1F1E6}-\u{1F1FF}])/gu;
     const speakableText = text.replace(emojiRegex, '').replace(/ +/g, ' ').trim();
-    console.log("Original text:", text);
-    console.log("Speakable text:", speakableText);
-    // --- End filtering ---
+
+    if (!speakableText) {
+      console.log("Skipping speech: only emojis or empty text.");
+      setIsSpeaking(false); // Ensure speaking is false if nothing to say
+      return;
+    }
 
     const utterance = new SpeechSynthesisUtterance(speakableText);
-    utterance.lang = 'kn-IN'; // Still prefer Kannada voice if available
-
-    // --- Find Voice (remains the same) ---
+    utterance.lang = 'kn-IN';
     const voices = window.speechSynthesis.getVoices();
-    if (voices.length === 0) {
-        console.warn("Speech synthesis voices list is empty...");
-        setKannadaVoiceFound(false);
+    const kannadaVoice = voices.find(voice => voice.lang === 'kn-IN');
+
+    if (kannadaVoice) {
+      utterance.voice = kannadaVoice;
+      if (kannadaVoiceFound !== true) setKannadaVoiceFound(true);
     } else {
-        const kannadaVoice = voices.find(voice => voice.lang === 'kn-IN');
-        if (kannadaVoice) {
-          utterance.voice = kannadaVoice;
-          console.log("Using Kannada voice:", kannadaVoice.name);
-          if (kannadaVoiceFound !== true) setKannadaVoiceFound(true);
-        } else {
-          console.warn("No Kannada ('kn-IN') voice found...");
-          if (kannadaVoiceFound !== false) setKannadaVoiceFound(false);
-          if (!lastError.includes("No Kannada voice")) {
-              setLastError("Warning: No Kannada voice available in your browser for speech output.");
-          }
-          // If no Kannada voice, the browser might use a default (likely English)
-          // We still set the lang attribute above, but voice selection might fail.
-        }
+      if (kannadaVoiceFound !== false) setKannadaVoiceFound(false);
+      if (!lastError.includes("No Kannada voice")) {
+          setLastError("Warning: No Kannada voice available in your browser for speech output.");
+      }
     }
-    // --- End Voice Selection ---
 
-    // --- Adjust Speech Rate ---
     utterance.pitch = 1;
-    utterance.rate = 0.8; // Lower value = slower speech (Default is 1)
+    utterance.rate = 0.65;
     utterance.volume = 1;
-    // --- End Rate Adjustment ---
 
-    // --- Event Handlers (remain the same) ---
     utterance.onstart = () => {
-      console.log("Speech started");
-      setIsSpeaking(true);
+      console.log("Browser TTS started");
+      setIsSpeaking(true); // Set speaking true HERE
       if (!lastError.includes("No Kannada voice")) {
           setLastError('');
       }
     };
 
     utterance.onend = () => {
-      console.log("Speech finished");
-      setIsSpeaking(false);
+      console.log("Browser TTS finished");
+      setIsSpeaking(false); // Set speaking false HERE
     };
 
     utterance.onerror = (event) => {
-      console.error("Speech synthesis error:", event.error);
-      setIsSpeaking(false);
+      console.error("Browser speech synthesis error:", event.error);
+      setIsSpeaking(false); // Set speaking false on error
       setLastError(`Speech synthesis error: ${event.error}`);
     };
-    // --- End Event Handlers ---
 
     utteranceRef.current = utterance;
-    if (speakableText) {
-        window.speechSynthesis.speak(utterance);
-    } else {
-        console.log("Skipping speech: only emojis were present.");
-        setIsSpeaking(false);
-    }
+    // setIsSpeaking(true); // Set speaking true BEFORE calling speak
+    window.speechSynthesis.speak(utterance);
   };
 
   // --- Gemini API Interaction ---
@@ -189,7 +195,29 @@ export default function Home() {
       const data = await response.json();
       console.log("Received from Gemini:", data.response); // Will include emojis
       setAiResponse(data.response); // Set state with emojis for UI display
-      speak(data.response); // Call speak, which now filters emojis internally before TTS
+
+      // Clean up any existing speech synthesis
+      cleanupSpeech();
+
+      // Create and store the utterance
+      const utterance = new SpeechSynthesisUtterance(data.response);
+      utterance.lang = 'kn-IN';
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        speechSynthesisRef.current = null;
+      };
+      utterance.onerror = (event) => {
+        console.error('Speech synthesis error:', event);
+        setIsSpeaking(false);
+        speechSynthesisRef.current = null;
+      };
+
+      // Store the utterance reference
+      speechSynthesisRef.current = utterance;
+      
+      // Start speaking
+      setIsSpeaking(true);
+      window.speechSynthesis.speak(utterance);
 
     } catch (error) {
       console.error("Failed to send message to Gemini:", error);
@@ -206,66 +234,216 @@ export default function Home() {
 
   // --- Handler for stopping the conversation ---
   const handleStopConversation = () => {
-    console.log("Stopping conversation...");
+    cleanupSpeech();
+    setIsSpeaking(false);
+    setIsListening(false);
+    setUserTranscript('');
+    setAiResponse('');
+  };
 
-    // Immediately stop any ongoing speech synthesis
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
+  // Add a function to handle speech synthesis cleanup
+  const cleanupSpeech = () => {
+    if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-
-    // Stop speech recognition (though state change should handle this too)
-    // We might need to import SpeechRecognition here if we want direct control,
-    // but relying on the state change in SpeechControls is usually sufficient.
-    // SpeechRecognition.stopListening(); // Optional direct call
-
-    // Reset states
-    setIsSpeaking(false); // Explicitly set speaking to false
-    setIsChatting(false);
-    setIsListening(false); // Ensure listening state is also reset
-    setAiResponse('');    // Clear AI response
-    setUserTranscript(''); // Clear user transcript
-    setLastError(''); // Clear errors on stop
-
-    // Note: resetTranscript() from useSpeechRecognition hook needs to be called
-    // within SpeechControls where the hook is used.
+    if (speechSynthesisRef.current) {
+      speechSynthesisRef.current = null;
+    }
   };
+
+  // Add cleanup effect
+  useEffect(() => {
+    return () => {
+      cleanupSpeech();
+    };
+  }, []);
 
   // --- UI Rendering ---
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-blue-100 to-purple-100">
-      {/* Header */}
-      <header className="p-4 bg-white shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-700">{TARGET_LANGUAGE} Language Tutor</h1>
-      </header>
+    <main className="min-h-screen">
+      {!showDemo ? (
+        <div className="bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 min-h-screen">
+          <div className="container mx-auto px-4 py-20">
+            <motion.nav 
+              className="flex justify-between items-center mb-16"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <motion.div 
+                className="text-2xl font-bold text-white"
+                whileHover={{ scale: 1.05 }}
+              >
+                AI Tutor
+              </motion.div>
+              <div className="flex gap-6">
+                <motion.a 
+                  href="#features" 
+                  className="text-white hover:text-pink-200 transition"
+                  whileHover={{ scale: 1.05 }}
+                >
+                  Features
+                </motion.a>
+                <motion.a 
+                  href="#pricing" 
+                  className="text-white hover:text-pink-200 transition"
+                  whileHover={{ scale: 1.05 }}
+                >
+                  Pricing
+                </motion.a>
+                <motion.a 
+                  href="#about" 
+                  className="text-white hover:text-pink-200 transition"
+                  whileHover={{ scale: 1.05 }}
+                >
+                  About
+                </motion.a>
+              </div>
+            </motion.nav>
 
-      {/* Main Content */}
-      <main className="flex-grow flex flex-col md:flex-row items-center justify-center p-4 gap-4 overflow-hidden">
-        {/* 3D Canvas Area */}
-        <div className="w-full md:w-1/2 h-64 md:h-full">
-          {!isClient ? <TutorCanvasLoading /> : <TutorCanvas isSpeaking={isSpeaking} />}
-        </div>
+            <div className="flex flex-col md:flex-row gap-12 items-center">
+              <motion.div 
+                className="md:w-1/2"
+                initial={{ opacity: 0, x: -50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.7, delay: 0.2 }}
+              >
+                <h1 className="text-5xl md:text-6xl font-bold text-white leading-tight mb-6">
+                  Learn Faster with <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-yellow-300">AI-Powered</span> Tutoring
+                </h1>
+                <p className="text-xl text-indigo-100 mb-8">
+                  Get personalized guidance, instant feedback, and interactive learning experiences tailored to your unique needs.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <motion.button
+                    className="px-8 py-4 bg-gradient-to-r from-pink-500 to-orange-400 text-white font-bold rounded-full shadow-lg text-lg"
+                    whileHover={{ scale: 1.05, boxShadow: "0px 10px 20px rgba(0, 0, 0, 0.2)" }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowDemo(true)}
+                  >
+                    Try For Free
+                  </motion.button>
+                  <motion.button
+                    className="px-8 py-4 bg-transparent border-2 border-white text-white font-bold rounded-full text-lg"
+                    whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Learn More
+                  </motion.button>
+                </div>
+              </motion.div>
 
-        {/* Controls Area */}
-        <div className="w-full md:w-1/2 h-full flex flex-col items-center justify-center">
-          {!isClient ? <SpeechControlsLoading /> : (
-            <SpeechControls
-              isSpeaking={isSpeaking}
-              isChatting={isChatting}
-              aiResponse={aiResponse}
-              userTranscript={userTranscript}
-              setUserTranscript={setUserTranscript}
-              setIsListening={setIsListening}
-              setIsChatting={setIsChatting}
-              sendToGemini={sendToGemini}
-              stopConversationHandler={handleStopConversation}
-              lastError={lastError}
-              kannadaVoiceFound={kannadaVoiceFound}
-              TARGET_LANGUAGE={TARGET_LANGUAGE}
-              NATIVE_LANGUAGE={NATIVE_LANGUAGE}
-            />
-          )}
+              <motion.div 
+                className="md:w-1/2"
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.7, delay: 0.4 }}
+              >
+                <div className="rounded-2xl overflow-hidden shadow-2xl border border-indigo-300/20 bg-gradient-to-br from-indigo-900/80 to-purple-800/80 backdrop-blur-sm p-4">
+                  <img 
+                    src="/demo-screenshot.png" 
+                    alt="AI Tutor Interface Preview" 
+                    className="rounded-lg w-full h-auto"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/600x400/4c1d95/ffffff?text=AI+Tutor+Interface";
+                    }}
+                  />
+                </div>
+              </motion.div>
+            </div>
+
+            <motion.div 
+              className="mt-32 text-center"
+              id="features"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.6 }}
+            >
+              <h2 className="text-3xl font-bold text-white mb-16">Why Choose Our AI Tutor?</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <motion.div 
+                  className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
+                  whileHover={{ y: -10, backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+                >
+                  <div className="bg-gradient-to-br from-pink-500 to-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-3">Personalized Learning</h3>
+                  <p className="text-indigo-100">Adaptive learning path that adjusts to your knowledge level and learning style.</p>
+                </motion.div>
+                
+                <motion.div 
+                  className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
+                  whileHover={{ y: -10, backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+                >
+                  <div className="bg-gradient-to-br from-blue-500 to-cyan-400 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-3">Learn At Your Pace</h3>
+                  <p className="text-indigo-100">No time constraints. Practice and learn whenever it's convenient for you.</p>
+                </motion.div>
+                
+                <motion.div 
+                  className="bg-white/10 backdrop-blur-sm p-8 rounded-xl"
+                  whileHover={{ y: -10, backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+                >
+                  <div className="bg-gradient-to-br from-orange-500 to-yellow-400 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-3">Instant Feedback</h3>
+                  <p className="text-indigo-100">Get immediate responses and corrections to enhance your learning experience.</p>
+                </motion.div>
+              </div>
+            </motion.div>
+          </div>
+          
+          <motion.div 
+            className="py-16 mt-16 bg-gradient-to-t from-black/50 to-transparent"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 0.8 }}
+          >
+            <div className="container mx-auto px-4 text-center">
+              <h2 className="text-4xl font-bold text-white mb-8">Ready to transform your learning experience?</h2>
+              <motion.button
+                className="px-10 py-5 bg-gradient-to-r from-pink-500 to-orange-400 text-white font-bold rounded-full shadow-lg text-xl"
+                whileHover={{ scale: 1.05, boxShadow: "0px 15px 25px rgba(0, 0, 0, 0.3)" }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowDemo(true)}
+              >
+                Get Started Now
+              </motion.button>
+            </div>
+          </motion.div>
         </div>
-      </main>
-    </div>
+      ) : (
+        <div className="min-h-screen">
+          <TutorCanvas 
+            isSpeaking={isSpeaking}
+            isListening={isListening}
+            userTranscript={userTranscript}
+            aiResponse={aiResponse}
+            handleStopConversation={handleStopConversation}
+            isChatting={isChatting}
+            setIsChatting={setIsChatting}
+            lastError={lastError}
+            onMessageSubmit={sendToGemini}
+            setUserTranscript={setUserTranscript}
+            setIsListening={setIsListening}
+            targetLanguage={TARGET_LANGUAGE}
+            nativeLanguage={NATIVE_LANGUAGE}
+            kannadaVoiceFound={kannadaVoiceFound}
+            setShowDemo={setShowDemo}
+          />
+        </div>
+      )}
+    </main>
   );
 }
