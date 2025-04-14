@@ -177,6 +177,10 @@ export default function SpeechControls({
   console.log("SpeechControls Render - listening:", listening, "isSpeaking:", isSpeaking, "textInput:", `"${textInput}"`);
   // --- End Add ---
 
+  if (!browserSupportsSpeechRecognition) {
+    return <span>Browser doesn't support speech recognition.</span>;
+  }
+
   return (
     <div className="w-full h-full flex flex-col items-center justify-between p-4 bg-white bg-opacity-80 rounded-lg shadow-lg overflow-y-auto"> {/* Allow vertical scroll */}
       {!isChatting ? (
