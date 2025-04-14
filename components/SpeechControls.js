@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+import { isIOS } from 'react-device-detect'; // You might need to install this package
 
 export default function SpeechControls({
   isSpeaking,  // Whether the AI is currently speaking
@@ -177,8 +178,8 @@ export default function SpeechControls({
   console.log("SpeechControls Render - listening:", listening, "isSpeaking:", isSpeaking, "textInput:", `"${textInput}"`);
   // --- End Add ---
 
-  if (!browserSupportsSpeechRecognition) {
-    return <span>Browser doesn't support speech recognition.</span>;
+  if (!browserSupportsSpeechRecognition || (isIOS && !isMicrophoneAvailable)) {
+    return <span>Speech recognition is not supported on this browser or microphone access is denied.</span>;
   }
 
   return (

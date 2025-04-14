@@ -863,20 +863,11 @@ export default function Home() {
         </div>
       )}
 
-      {/* Example: Button to start the demo - adapt as needed */}
-      {!showDemo && (
-        <button onClick={handleStartDemo}>Start Learning Kannada</button>
-        /* OR if this button should directly start listening: */
-        /* <button onClick={startListening} disabled={isListening}>
-             {isListening ? 'Listening...' : 'Start Learning Kannada'}
-           </button> */
-      )}
+
 
       {/* Display permission errors */}
       {permissionError && <p style={{ color: 'red' }}>{permissionError}</p>}
 
-      {/* Display transcript */}
-      {userTranscript && <p>You said: {userTranscript}</p>}
 
     </main>
   );
