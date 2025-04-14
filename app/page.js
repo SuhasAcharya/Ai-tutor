@@ -59,30 +59,18 @@ export default function Home() {
   useEffect(() => {
     setIsClient(true);
     setSessionId(uuidv4()); // Generate sessionId on client mount
-    // Pre-load voices on client mount after a small delay
     const timer = setTimeout(() => {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
-        // Pre-load voices by calling getVoices(). The actual list might populate asynchronously.
         window.speechSynthesis.getVoices();
-        // Add an event listener for when voices change (important for some browsers)
         window.speechSynthesis.onvoiceschanged = () => {
-          console.log("Voices loaded/changed.");
-          // Re-check for Kannada voice here if needed, or let speak() handle it
           const voices = window.speechSynthesis.getVoices();
           const found = voices.some(voice => voice.lang === 'kn-IN');
           setKannadaVoiceFound(found);
-          if (!found) {
-            console.warn("No Kannada ('kn-IN') voice found during preload check.");
-            // Optionally set error here, but speak() also handles it
-            // setLastError("Warning: No Kannada voice available in your browser for speech output.");
-          } else {
-            console.log("Kannada voice found during preload check.");
-          }
         };
       }
-    }, 500); // Adjust delay if needed
-    return () => clearTimeout(timer); // Cleanup timer
-  }, []); // Empty dependency array ensures this runs only once on mount
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // --- Restore Original Speech Synthesis Handling (using window.speechSynthesis) ---
   const speak = (text) => {
@@ -105,7 +93,6 @@ export default function Home() {
     const speakableText = text.replace(emojiRegex, '').replace(/ +/g, ' ').trim();
 
     if (!speakableText) {
-      console.log("Skipping speech: only emojis or empty text.");
       setIsSpeaking(false);
       return;
     }
@@ -136,7 +123,6 @@ export default function Home() {
     utterance.text = wordsWithPauses;
 
     utterance.onstart = () => {
-      console.log("Browser TTS started");
       setIsSpeaking(true); // Set speaking true HERE
       if (!lastError.includes("No Kannada voice")) {
         setLastError('');
@@ -144,18 +130,15 @@ export default function Home() {
     };
 
     utterance.onend = () => {
-      console.log("Browser TTS finished");
       setIsSpeaking(false); // Set speaking false HERE
     };
 
     utterance.onerror = (event) => {
-      console.error("Browser speech synthesis error:", event.error);
       setIsSpeaking(false); // Set speaking false on error
       setLastError(`Speech synthesis error: ${event.error}`);
     };
 
     utteranceRef.current = utterance;
-    // setIsSpeaking(true); // Set speaking true BEFORE calling speak
     window.speechSynthesis.speak(utterance);
   };
 
@@ -167,13 +150,11 @@ export default function Home() {
   // --- Gemini API Interaction ---
   const sendToGemini = (message) => {
     if (!sessionId) {
-      console.error("Session ID not set.");
       setLastError("Error: Cannot start chat without a session ID.");
       return;
     }
     if (!message) return;
 
-    console.log("Sending to Gemini:", message);
     setAiResponse('...'); // Indicate loading
     setLastError(''); // Clear previous errors
 
@@ -191,7 +172,6 @@ export default function Home() {
         return response.json();
       })
       .then(data => {
-        console.log("Received from Gemini:", data.response);
         setAiResponse(data.response);
         cleanupSpeech();
 
@@ -203,7 +183,6 @@ export default function Home() {
           speechSynthesisRef.current = null;
         };
         utterance.onerror = (event) => {
-          console.error('Speech synthesis error:', event);
           setIsSpeaking(false);
           speechSynthesisRef.current = null;
         };
@@ -213,7 +192,6 @@ export default function Home() {
         window.speechSynthesis.speak(utterance);
       })
       .catch(error => {
-        console.error("Failed to send message to Gemini:", error);
         const displayError = error.message && !error.message.toLowerCase().startsWith('error:')
           ? `Error: ${error.message}`
           : error.message || "Error: An unknown error occurred.";
@@ -250,46 +228,32 @@ export default function Home() {
 
   // --- Function to handle starting speech recognition ---
   const startListening = useCallback(() => {
-    console.log("--- startListening called ---"); // Log entry
     setPermissionError('');
     setUserTranscript('');
 
     if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-      console.log("Speech Recognition API available.");
-
-      // --- Explicitly request microphone permission first ---
-      console.log("Attempting navigator.mediaDevices.getUserMedia...");
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then((stream) => {
-          console.log("getUserMedia promise resolved successfully.");
           stream.getTracks().forEach(track => track.stop());
-          console.log("Mic stream tracks stopped.");
 
-          // --- Setup SpeechRecognition ---
           const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
           if (!recognitionRef.current) {
-            console.log("Creating new SpeechRecognition instance.");
             recognitionRef.current = new SpeechRecognition();
             recognitionRef.current.continuous = false;
             recognitionRef.current.interimResults = false;
             recognitionRef.current.lang = NATIVE_LANGUAGE === 'English' ? 'en-US' : 'kn-IN';
-            console.log("SpeechRecognition instance created with lang:", recognitionRef.current.lang);
 
             recognitionRef.current.onstart = () => {
-              console.log(">>> Recognition Started (onstart event)");
               setIsListening(true);
               setPermissionError('');
             };
 
             recognitionRef.current.onresult = (event) => {
-              console.log(">>> Recognition Result (onresult event):", event.results);
               const transcript = event.results[0][0].transcript;
               setUserTranscript(transcript);
             };
 
             recognitionRef.current.onerror = (event) => {
-              // Log the *entire* event object for more details
-              console.error(">>> Recognition Error (onerror event):", event);
               let errorMsg = `Speech recognition error: ${event.error}`;
               if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
                 errorMsg = "Microphone permission denied. Please enable microphone access in your browser settings.";
@@ -297,7 +261,6 @@ export default function Home() {
               } else if (event.error === 'no-speech') {
                 errorMsg = "No speech detected. Please try again.";
               } else {
-                // Add more details if available
                 errorMsg = `Speech recognition error: ${event.error}${event.message ? ` (${event.message})` : ''}`;
                 setPermissionError(errorMsg);
               }
@@ -305,35 +268,25 @@ export default function Home() {
             };
 
             recognitionRef.current.onend = () => {
-              console.log(">>> Recognition Ended (onend event)");
               setIsListening(false);
             };
-          } else {
-            console.log("Reusing existing SpeechRecognition instance.");
           }
 
-          // --- Attempt to start recognition ---
           try {
-            console.log("Calling recognitionRef.current.start()...");
             recognitionRef.current.start();
-            console.log("recognitionRef.current.start() called without immediate error.");
           } catch (error) {
-            console.error("!!! Error caught during recognitionRef.current.start():", error);
             setPermissionError("Could not start speech recognition (catch block).");
             setIsListening(false);
           }
 
         })
         .catch((err) => {
-          console.error("!!! getUserMedia promise rejected:", err.name, err.message);
-          // Use alert for immediate feedback on mobile if console isn't visible
           alert(`Mic Permission Error: ${err.name}. Check Browser Settings.`);
           setPermissionError(`Microphone permission failed: ${err.name}. Please check browser site settings.`);
           setIsListening(false);
         });
 
     } else {
-      console.warn("Speech Recognition API not supported.");
       setPermissionError("Speech recognition is not supported in this browser.");
       setIsListening(false);
     }
@@ -342,7 +295,6 @@ export default function Home() {
   // --- Function to stop listening ---
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
-      console.log("Stopping speech recognition manually.");
       recognitionRef.current.stop();
       setIsListening(false);
     }
@@ -350,10 +302,8 @@ export default function Home() {
 
   // --- Effect for cleanup ---
   useEffect(() => {
-    // Return a cleanup function
     return () => {
       if (recognitionRef.current) {
-        console.log("Cleaning up speech recognition instance.");
         recognitionRef.current.stop(); // Stop recognition if active
         recognitionRef.current = null; // Release the instance
       }
@@ -366,10 +316,6 @@ export default function Home() {
   // Example: If you have a button that sets showDemo
   const handleStartDemo = () => {
     setShowDemo(true);
-    // You might want to trigger listening *after* the canvas/demo is shown,
-    // perhaps inside the TutorCanvas component or via another button there.
-    // OR, if the button *itself* should start listening:
-    // startListening();
   };
 
   // Example: If you have a dedicated microphone button inside SpeechControls or TutorCanvas
@@ -519,7 +465,6 @@ export default function Home() {
                     whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
-                      // Smooth scroll to About section
                       document.getElementById('about')?.scrollIntoView({
                         behavior: 'smooth',
                         block: 'start'
@@ -530,24 +475,6 @@ export default function Home() {
                   </motion.button>
                 </div>
               </motion.div>
-
-              {/* <motion.div 
-                className="md:w-1/2"
-                initial={{ opacity: 0, x: 50 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.7, delay: 0.4 }}
-              >
-                <div className="rounded-2xl overflow-hidden shadow-2xl border border-indigo-300/20 bg-gradient-to-br from-indigo-900/80 to-purple-800/80 backdrop-blur-sm p-4">
-                  <img 
-                    src="/demo-screenshot.png" 
-                    alt="AI Tutor Interface Preview" 
-                    className="rounded-lg w-full h-auto"
-                    onError={(e) => {
-                      e.target.src = "https://via.placeholder.com/600x400/4c1d95/ffffff?text=AI+Tutor+Interface";
-                    }}
-                  />
-                </div>
-              </motion.div> */}
             </div>
 
             <motion.div
@@ -760,26 +687,6 @@ export default function Home() {
             </motion.div>
           </div>
 
-          {/* <motion.div
-            className="py-16 mt-16 bg-gradient-to-t from-black/50 to-transparent"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 0.8 }}
-          >
-            <div className="container mx-auto px-4 text-center">
-              <h2 className="text-4xl font-bold text-white mb-8">Ready to transform your learning experience?</h2>
-              <motion.button
-                className="px-10 py-5 bg-gradient-to-r from-pink-500 to-orange-400 text-white font-bold rounded-full shadow-lg text-xl"
-                whileHover={{ scale: 1.05, boxShadow: "0px 15px 25px rgba(0, 0, 0, 0.3)" }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowDemo(true)}
-              >
-                Get Started Now
-              </motion.button>
-            </div>
-          </motion.div> */}
-
-          {/* Original Footer */}
           <motion.div
             className="bg-indigo-900/80 backdrop-blur-sm border-t border-indigo-700 py-6 px-4"
             initial={{ opacity: 0 }}
@@ -863,11 +770,8 @@ export default function Home() {
         </div>
       )}
 
-
-
       {/* Display permission errors */}
       {permissionError && <p style={{ color: 'red' }}>{permissionError}</p>}
-
 
     </main>
   );

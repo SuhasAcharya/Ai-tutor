@@ -3,11 +3,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+import { Toaster, toast } from 'react-hot-toast';
 import StartLearningOverlay from './StartLearningOverlay';
 import ChatHeader from './ChatHeader';
 import MessageList from './MessageList';
 import ChatControls from './ChatControls';
 import TutorAvatar from './TutorAvatar';
+
+// Helper function to detect iOS (can be placed outside or in a utils file)
+const isIOS = () => {
+  // Check for iPad, iPhone, or iPod and ensure it's not Windows Phone (which also includes "iPhone" in UA string sometimes)
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
 
 export default function TutorCanvas({
   isSpeaking,
@@ -62,8 +69,7 @@ export default function TutorCanvas({
     transcript,
     listening,
     resetTranscript,
-    browserSupportsSpeechRecognition,
-    isMicrophoneAvailable
+    browserSupportsSpeechRecognition
   } = useSpeechRecognition({ commands });
 
   // Add effect to update parent state when transcript changes
@@ -97,50 +103,122 @@ export default function TutorCanvas({
 
   // Update the speech handling effects
   useEffect(() => {
-    // Stop listening when AI starts speaking
     if (isSpeaking && listening) {
       console.log("AI speaking, stopping listening");
       SpeechRecognition.stopListening();
     }
-    // Resume listening when AI stops speaking (if we were listening before)
-    else if (!isSpeaking && isChatting && !listening) {
-      console.log("AI stopped speaking, resuming listening");
-      startListening();
+    // --- Modification: Avoid auto-restarting listening on iOS ---
+    // --- because continuous mode is unreliable/disabled      ---
+    else if (!isSpeaking && isChatting && !listening && !isIOS()) {
+      console.log("AI stopped speaking, resuming listening (non-iOS)");
+      // Consider if auto-restart is desired even on non-iOS if continuous is off
+      // startListening(); // Re-enable if you want auto-restart on non-iOS
     }
-  }, [isSpeaking, isChatting]);
+  }, [isSpeaking, isChatting, listening]); // Added listening dependency
 
   // Update the startListening function
   const startListening = async () => {
     try {
       if (!browserSupportsSpeechRecognition) {
-        alert("Speech recognition not supported in this browser.");
+        toast.error("Speech recognition is not supported in this browser. Please use the text input.");
         return;
       }
 
-      if (!isMicrophoneAvailable) {
-        alert("Please enable microphone access to use speech recognition.");
+      // --- Modification: Specific check for Kannada on iOS ---
+      if (languageCode === 'kn-IN' && isIOS()) {
+        toast(
+          (t) => (
+            <div className="text-center">
+              <p className="text-xl mb-1">
+                Aiyyo 🥲!
+              </p>
+              <p className="text-sm">
+                Kannada voice input isn't quite ready for iOS browsers yet.
+              </p>
+              <p className="text-sm mt-1">
+                Suhas is working on it! Please use the text input for now. 🙏
+              </p>
+            </div>
+          ),
+          {
+            duration: 6000,
+            style: {
+              maxWidth: '400px',
+            },
+          }
+        );
         return;
       }
 
-      // Don't start listening if AI is speaking
+      // --- Modification: Check microphone permission state ---
+      let permissionState = 'prompt';
+      try {
+        const micPermission = await navigator.permissions.query({ name: 'microphone' });
+        permissionState = micPermission.state;
+        micPermission.onchange = () => {
+          console.log(`Microphone permission state changed to: ${micPermission.state}`);
+          // You might want to update UI based on this change
+        };
+      } catch (permError) {
+        console.warn("Permissions API not fully supported or error querying microphone state:", permError);
+      }
+
+      if (permissionState === 'denied') {
+        toast.error("Microphone access was denied. Please enable it in your browser/system settings and refresh the page.");
+        return;
+      }
+
+      // Attempt to get user media to trigger prompt if state is 'prompt'
+      // This is often needed on first use or if permissions API is limited
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("Microphone access granted or already available.");
+        // Close the stream immediately if only needed for permission check
+        // stream.getTracks().forEach(track => track.stop()); // Uncomment if needed
+      } catch (getUserMediaError) {
+        if (getUserMediaError.name === 'NotAllowedError' || getUserMediaError.name === 'PermissionDeniedError') {
+          toast.error("Microphone access was not allowed. Please grant permission when prompted.");
+        } else {
+          console.error("Error accessing microphone:", getUserMediaError);
+          toast.error("Could not access the microphone. Please ensure it's connected and not in use.");
+        }
+        return; // Stop if we can't get microphone access
+      }
+
       if (isSpeaking) {
-        console.log("Cannot start listening while AI is speaking");
+        toast("Hold on! Let the tutor finish speaking first. 😊", { icon: '🤫' });
         return;
       }
 
       console.log("Starting speech recognition...");
       resetTranscript();
       setUserTranscript('');
-      setIsChatting(true);
 
-      await SpeechRecognition.startListening({
-        continuous: true,
+      // --- Modification: Adjust options for iOS ---
+      const options = {
         language: languageCode,
-        interimResults: true
-      });
+        continuous: !isIOS(), // Disable continuous mode on iOS
+        interimResults: false // Disable interim results for stability
+      };
+      console.log("Using options:", options);
+
+      // Start listening
+      await SpeechRecognition.startListening(options);
+
     } catch (error) {
-      console.error("Error starting speech recognition:", error);
-      alert("Error starting speech recognition. Please try again.");
+      console.error("Error in startListening function:", error);
+      if (error.name === 'NotAllowedError' || error.name === 'SecurityError' || error.name === 'PermissionDeniedError') {
+        toast.error("Looks like microphone access wasn't granted. Please check permissions!");
+      } else if (error.name === 'NoSpeechRecognizedError') {
+        toast.error("Hmm, didn't catch that. Could you try speaking again?");
+      } else if (error.name === 'network') {
+        toast.error("Network hiccup! Please check your connection and try again.");
+      } else if (error.name === 'language-not-supported') {
+        toast.error(`Sorry, your browser doesn't support voice input for ${languageCode} yet.`);
+      }
+      else {
+        toast.error("Something went wrong with voice input. Try again or use text?");
+      }
     }
   };
 
@@ -148,10 +226,12 @@ export default function TutorCanvas({
   const stopListening = async () => {
     try {
       await SpeechRecognition.stopListening();
-      if (transcript.trim()) {
-        onMessageSubmit(transcript);
-      }
-      resetTranscript();
+      console.log("Stopped listening.");
+      // Process final transcript if needed (your timeout effect might handle this)
+      // if (transcript.trim()) {
+      //   onMessageSubmit(transcript);
+      // }
+      // resetTranscript(); // Resetting here might clear transcript before timeout processes it
     } catch (error) {
       console.error("Error stopping speech recognition:", error);
     }
@@ -265,8 +345,36 @@ export default function TutorCanvas({
   return (
     // Force container to screen height and prevent *its* scrollbar
     <div className="flex flex-col h-screen bg-gradient-to-br from-indigo-900 via-purple-800 to-indigo-900 relative overflow-hidden">
+      <Toaster
+        position="top-center"
+        reverseOrder={false}
+        toastOptions={{
+          className: '',
+          duration: 4000,
+          style: {
+            background: '#374151',
+            color: '#fff',
+            padding: '12px',
+            borderRadius: '8px',
+          },
+          success: {
+            iconTheme: { primary: '#10B981', secondary: '#fff' },
+          },
+          error: {
+            iconTheme: { primary: '#EF4444', secondary: '#fff' },
+            duration: 5000,
+          },
+        }}
+      />
+
       {!isChatting ? (
-        <StartLearningOverlay onStartLearning={() => setIsChatting(true)} />
+        <StartLearningOverlay onStartLearning={() => {
+          setIsChatting(true);
+          // Optional: Try to start listening immediately after overlay if not iOS/Kannada
+          // if (!(languageCode === 'kn-IN' && isIOS())) {
+          //    setTimeout(startListening, 100); // Delay slightly
+          // }
+        }} />
       ) : (
         // Use fragment or div, doesn't need flex properties itself if children handle layout
         <>
@@ -322,4 +430,4 @@ export default function TutorCanvas({
       )}
     </div>
   );
-}
+} 

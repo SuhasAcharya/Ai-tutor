@@ -31,34 +31,24 @@ export default function SpeechControls({
   const [textInput, setTextInput] = useState(''); // State for text input
   const pauseTimeoutRef = useRef(null); // Ref to manage the pause timeout
 
-  // Debug logging
-  console.log("SpeechControls render - languageCode:", languageCode);
-  console.log("Current transcript:", transcript);
-  console.log("Listening status:", listening);
-
   // Update parent state when transcript/listening changes
   useEffect(() => {
     if (transcript) {
-      console.log("Setting user transcript:", transcript);
       setUserTranscript(transcript);
     }
   }, [transcript, setUserTranscript]);
 
   useEffect(() => {
-    console.log("Setting isListening:", listening);
     setIsListening(listening);
   }, [listening, setIsListening]);
 
   // Pause listening while AI is speaking or user is typing
   useEffect(() => {
     if ((isSpeaking || textInput) && listening) {
-      console.log("AI Speaking or user typing, stopping recognition temporarily.");
       if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
       SpeechRecognition.stopListening();
     } else if (!isSpeaking && !textInput && isChatting && !listening) {
-      console.log(`Resuming recognition for ${targetLanguage} with code ${languageCode}`);
       resetTranscript();
-      // Use the languageCode from props instead of hardcoded 'kn-IN'
       SpeechRecognition.startListening({ continuous: true, language: languageCode });
     }
   }, [isSpeaking, isChatting, listening, resetTranscript, textInput, languageCode, targetLanguage]);
@@ -67,7 +57,6 @@ export default function SpeechControls({
   const processTranscriptAfterPause = useCallback(() => {
     const finalTranscript = transcript.trim();
     if (finalTranscript) {
-      console.log(`Processing transcript: "${finalTranscript}"`);
       SpeechRecognition.stopListening();
       setUserTranscript(finalTranscript); // Set the transcript first
 
@@ -88,9 +77,7 @@ export default function SpeechControls({
     }
 
     if (listening && transcript && !isSpeaking) {
-      console.log("Setting pause detection timeout");
       pauseTimeoutRef.current = setTimeout(() => {
-        console.log(`Pause detected (${targetLanguage}).`);
         processTranscriptAfterPause();
       }, 1500);
     }
@@ -117,8 +104,6 @@ export default function SpeechControls({
     setTextInput('');
     setIsChatting(true);
 
-    console.log(`Starting recognition for ${targetLanguage} with code ${languageCode}`);
-    // Use the languageCode from props
     SpeechRecognition.startListening({
       continuous: true,
       language: languageCode
@@ -128,20 +113,18 @@ export default function SpeechControls({
   // --- Add Handler for Stop Listening Button ---
   const handleStopListeningClick = () => {
     if (listening) {
-      console.log("User clicked Stop Listening.");
-      if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current); // Clear any pending pause timeout
+      if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
       SpeechRecognition.stopListening();
     }
   };
   // --- End Handler ---
 
   const handleStopClick = () => {
-    console.log("User clicked Stop Conversation.");
     if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
-    if (listening) SpeechRecognition.stopListening(); // Ensure listening stops
-    stopConversationHandler(); // Call parent handler (clears errors etc.)
+    if (listening) SpeechRecognition.stopListening();
+    stopConversationHandler();
     resetTranscript();
-    setTextInput(''); // Clear text input on stop
+    setTextInput('');
   };
 
   // Handler for sending text input
@@ -149,18 +132,13 @@ export default function SpeechControls({
     const textToSend = textInput.trim(); // Trim whitespace
     if (!textToSend) return; // Don't send empty text
 
-    console.log("Sending text input:", textToSend);
-
-    // --- Update the transcript display with the typed text ---
     setUserTranscript(textToSend);
-    // --- End update ---
 
     sendToGemini(textToSend); // Send the trimmed text to the AI
     setTextInput(''); // Clear input after sending
 
     // Ensure recognition is stopped if user was typing (redundant check is okay)
     if (listening) {
-      console.log("Stopping listening because text was sent.");
       SpeechRecognition.stopListening();
     }
   };
@@ -173,10 +151,6 @@ export default function SpeechControls({
       handleSendText();
     }
   };
-
-  // --- Add this console log ---
-  console.log("SpeechControls Render - listening:", listening, "isSpeaking:", isSpeaking, "textInput:", `"${textInput}"`);
-  // --- End Add ---
 
   if (!browserSupportsSpeechRecognition || (isIOS && !isMicrophoneAvailable)) {
     return <span>Speech recognition is not supported on this browser or microphone access is denied.</span>;
