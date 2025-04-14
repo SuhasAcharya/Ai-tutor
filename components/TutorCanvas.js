@@ -136,7 +136,7 @@ export default function TutorCanvas({
                 Kannada voice input isn't quite ready for iOS browsers yet.
               </p>
               <p className="text-sm mt-1">
-                Suhas is working on it! Please use the text input for now. 🙏
+                Suhas is working on it! Please use the text input for now. 😄
               </p>
             </div>
           ),
